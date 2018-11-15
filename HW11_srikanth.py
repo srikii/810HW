@@ -4,6 +4,7 @@ import os
 from prettytable import PrettyTable
 from collections import defaultdict
 import unittest
+import sqlite3
 
 
 def file_read(path, num_fields, seperator=',', header=False):
@@ -107,6 +108,7 @@ class Repository:
         self.major_table()
         self.student_table()
         self.instructor_table()
+        self.instructor_table_usingdb()
 
     def read_students(self, path_dir):
         try:
@@ -177,6 +179,17 @@ class Repository:
         print("instructor pretty table")
         print(pt)
 
+    def instructor_table_usingdb(self):
+        print("\n\ninstructor pretty tabe using database")
+        pt = PrettyTable(
+            field_names=['cwid', 'name', 'dept', 'course', 'students'])
+        db_file = r"D:\college\ssw 810\repo\database\810database.db"
+        db = sqlite3.connect(db_file)
+        q = "select i.NAME, i.CWID, i.Dept, g.Course, count(g.student_CWID) as total_students from instructors i join grades g on i.CWID=g.instructor_CWID group by i.cwid, g.course;"
+        for row in db.execute(q):
+            pt.add_row(row)
+        print(pt)
+
 
 def main():
     path_dir = "D:\\college\\ssw 810\\repo\\"
@@ -184,44 +197,5 @@ def main():
     stevens = Repository(path_dir)
 
 
-class RepositoryTest(unittest.TestCase):
-    def test_stevens(self):
-        path_dir = "D:\\college\\ssw 810\\repo\\"
-        stevens = Repository(path_dir)
-        student = [["10103", "Baldwin, C", "SFEN", ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687'], {'SSW 555', 'SSW 540'}, None],
-                        ["10115", "Wyatt, X", "SFEN", ['CS 545', 'SSW 564', 'SSW 567', 'SSW 687'], {'SSW 555', 'SSW 540'}, None],
-                        ["10172", "Forbes, I", "SFEN", ['SSW 555', 'SSW 567'], {'SSW 564', 'SSW 540'}, {'CS 545', 'CS 501', 'CS 513'}],
-                        ["10175", "Erickson, D", "SFEN", ['SSW 564', 'SSW 567', 'SSW 687'], {'SSW 555', 'SSW 540'}, {'CS 545', 'CS 501', 'CS 513'}],
-                        ["10183", "Chapman, O", "SFEN", ['SSW 689'], {'SSW 567', 'SSW 555', 'SSW 564', 'SSW 540'}, {'CS 545', 'CS 501', 'CS 513'}],
-                        ["11399", "Cordova, I", "SYEN", ['SSW 540'], {'SYS 612', 'SYS 800', 'SYS 671'}, None],
-                        ["11461", "Wright, U", "SYEN", ['SYS 611', 'SYS 750', 'SYS 800'], {'SYS 671', 'SYS 612'}, {'SSW 565', 'SSW 540', 'SSW 810'}],
-                        ["11658", "Kelly, P", "SYEN", [], {'SYS 800', 'SYS 612', 'SYS 671'}, {'SSW 565', 'SSW 540', 'SSW 810'}],
-                        ["11714", "Morton, A", "SYEN", ['SYS 611', 'SYS 645'], {'SYS 671', 'SYS 612', 'SYS 800'}, {'SSW 565', 'SSW 540', 'SSW 810'}],
-                        ["11788", "Fuller, E", "SYEN", ['SSW 540'], {'SYS 671', 'SYS 612', 'SYS 800'}, None]]
-        instructor = [["98765", "Einstein, A", "SFEN", "SSW 567", 4],
-        ["98765", "Einstein, A", "SFEN", "SSW 540", 3],
-         ["98764", "Feynman, R", "SFEN", "SSW 564", 3],
-         ["98764", "Feynman, R", "SFEN", "SSW 687", 3],
-         ["98764", "Feynman, R", "SFEN", "CS 501", 1],
-         ["98764", "Feynman, R", "SFEN", "CS 545", 1],
-         ["98763", "Newton, I", "SFEN", "SSW 555", 1],
-         ["98763", "Newton, I", "SFEN", "SSW 689", 1],
-         ["98760", "Darwin, C", "SYEN", "SYS 800", 1],
-         ["98760", "Darwin, C", "SYEN", "SYS 750", 1],
-         ["98760", "Darwin, C", "SYEN", "SYS 611", 2],
-         ["98760", "Darwin, C", "SYEN", "SYS 645", 1]]
-
-        major = [["SFEN", {'SSW 540', 'SSW 564', 'SSW 567', 'SSW 555'}, {'CS 545', 'CS 501', 'CS 513'}], ["SYEN", {'SYS 612', 'SYS 800', 'SYS 671'}, {'SSW 810', 'SSW 565', 'SSW 540'}]]
-
-        ptstudent = [s.pt_row() for s in stevens._students.values()]
-        ptinstructor = [row for Instructor in stevens._instructors.values() for row in Instructor.pt_row()]
-        ptmajor = [m.pt_row() for m in stevens._major.values()]
-
-        self.assertEqual(ptmajor, major)
-        self.assertEqual(ptstudent, student)
-        self.assertEqual(ptinstructor, instructor)
-
-
 if __name__ == '__main__':
     main()
-    unittest.main(exit=False, verbosity=2)
