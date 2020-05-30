@@ -1,9 +1,10 @@
-"""python progeam to crete database of stevens students and instructors
+"""python progeam to crete database of stevens students and instructors and majors
     author sikanth"""
 import os
 from prettytable import PrettyTable
 from collections import defaultdict
 import unittest
+import sqlite3
 
 
 def file_read(path, num_fields, seperator=',', header=False):
@@ -28,26 +29,25 @@ def file_read(path, num_fields, seperator=',', header=False):
 
 
 class Student:
-    def __init__(self, cwid, name, major):
+
+    def __init__(self, cwid, name, major_name, major):
         self._cwid = cwid
         self._name = name
         self._major = major
         self._course = dict()  # _course[course]=grade
-
-        #self.lable=["CWID", "Name", "Major", "Courses"]
+        self._major_name = major_name
 
     def add_course(self, course, grade):
         self._course[course] = grade
 
     def pt_row(self):
-        return[self._cwid, self._name, self._major, sorted(self._course.keys())]
-
-    def __str__(self):
-        return f"student: {self._cwid}  name: {self._name}  major: {self._major}  courses: {sorted(self._course.keys())}"
+        completed_courses, remaining_requried_course, remaining_elective_course = self._major.grade_check(
+            self._course)
+        return[self._cwid, self._name, self._major_name, list(sorted(completed_courses)), remaining_requried_course, remaining_elective_course]
 
 
 class Instructor:
-    #pt_lable= ["CWID", "name", "departmant","Courses","students"]
+
     def __init__(self, cwid, name, dept):
         self._cwid = cwid
         self._name = name
@@ -62,18 +62,53 @@ class Instructor:
             yield [self._cwid, self._name, self.dept, cr, st]
 
 
+class major:
+    def __init__(self, name, passing=None):
+        self._name = name
+        self._requried = set()
+        self._electives = set()
+        self._passing_grade = {'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'}
+
+    def pt_row(self):
+        return[self._name, self._requried, self._electives]
+
+    def add_course(self, flag, course):
+        if flag == 'E':
+            self._electives.add(course)
+        elif flag == 'R':
+            self._requried.add(course)
+        else:
+            raise ValueError(
+                "value error forund unexpected flag in majors file")
+
+    def grade_check(self, courses):
+        completed_courses = {
+            course for course, grade in courses.items() if grade in self._passing_grade}
+        remaining_requried_course = self._requried - completed_courses
+        if len(self._electives.intersection(completed_courses)) >= 1:
+            remaining_elective_course = None
+        else:
+            remaining_elective_course = self._electives
+
+        return[completed_courses, remaining_requried_course, remaining_elective_course]
+
+
 class Repository:
     def __init__(self, path_dir):
         self.path_dir = path_dir
         self._students = dict()
         self._instructors = dict()
+        self._major = dict()
 
-        #path_dir="D:\\college\\ssw 810\\repo\\"
-        self.read_students(os.path.join(path_dir, "students.txt"))
         self.read_instructors(os.path.join(path_dir, "instructors.txt"))
+        self.read_major(os.path.join(path_dir, "majors.txt"))
+        self.read_students(os.path.join(path_dir, "students.txt"))
         self.read_grades(os.path.join(path_dir, "grades.txt"))
+
+        self.major_table()
         self.student_table()
         self.instructor_table()
+        self.instructor_table_usingdb()
 
     def read_students(self, path_dir):
         try:
@@ -81,7 +116,8 @@ class Repository:
                 if cwid in self._students:
                     print(f"cwid {cwid} already read from the file")
                 else:
-                    self._students[cwid] = Student(cwid, name, major)
+                    self._students[cwid] = Student(
+                        cwid, name, major, self._major[major])
         except ValueError:
             print("value error")
 
@@ -108,9 +144,27 @@ class Repository:
             else:
                 print(f"student cwit {instructor_cwid} not in file")
 
+    def read_major(self, path_dir):
+        try:
+            for dept, requried, electives in file_read(path_dir, 3, seperator='\t', header=False):
+                if dept in self._major:
+                    self._major[dept].add_course(requried, electives)
+                else:
+                    self._major[dept] = major(dept)
+                    self._major[dept].add_course(requried, electives)
+        except ValueError:
+            print("value error: ")
+
+    def major_table(self):
+        pt = PrettyTable(
+            field_names=['major', 'requried course', 'elective course'])
+        for major in self._major.values():
+            pt.add_row(major.pt_row())
+        print(pt)
+
     def student_table(self):
         pt = PrettyTable(
-            field_names=['cwid', 'name', 'major', 'completed course'])
+            field_names=['cwid', 'name', 'major', 'completed', 'remaining', 'elective'])
         for Student in self._students.values():
             pt.add_row(Student.pt_row())
         print("student pretty table")
@@ -125,51 +179,23 @@ class Repository:
         print("instructor pretty table")
         print(pt)
 
-
-class RepositoryTest(unittest.TestCase):
-    def test_repository(self):
-        path_dir = "D:\\college\\ssw 810\\repo\\"
-        stevens = Repository(path_dir)
-        expect_student = [["10103", "Baldwin, C", "SFEN", ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687']],
-                          ["10115", "Wyatt, X", "SFEN", [
-                              'CS 545', 'SSW 564', 'SSW 567', 'SSW 687']],
-                          ["10172", "Forbes, I", "SFEN", ['SSW 555', 'SSW 567']],
-                          ["10175", "Erickson, D", "SFEN", [
-                              'SSW 564', 'SSW 567', 'SSW 687']],
-                          ["10183", "Chapman, O", "SFEN", ['SSW 689']],
-                          ["11399", "Cordova, I", "SYEN", ['SSW 540']],
-                          ["11461", "Wright, U", "SYEN", [
-                              'SYS 611', 'SYS 750', 'SYS 800']],
-                          ["11658", "Kelly, P", "SYEN", ['SSW 540']],
-                          ["11714", "Morton, A", "SYEN", ['SYS 611', 'SYS 645']],
-                          ["11788", "Fuller, E", "SYEN", ['SSW 540']]]
-        expect_instructor = [["98765", "Einstein, A", "SFEN", "SSW 567", 4],
-                             ["98765", "Einstein, A", "SFEN", "SSW 540", 3],
-                             ["98764", "Feynman, R", "SFEN", "SSW 564", 3],
-                             ["98764", "Feynman, R", "SFEN", "SSW 687", 3],
-                             ["98764", "Feynman, R", "SFEN", "CS 501", 1],
-                             ["98764", "Feynman, R", "SFEN", "CS 545", 1],
-                             ["98763", "Newton, I", "SFEN", "SSW 555", 1],
-                             ["98763", "Newton, I", "SFEN", "SSW 689", 1],
-                             ["98760", "Darwin, C", "SYEN", "SYS 800", 1],
-                             ["98760", "Darwin, C", "SYEN", "SYS 750", 1],
-                             ["98760", "Darwin, C", "SYEN", "SYS 611", 2],
-                             ["98760", "Darwin, C", "SYEN", "SYS 645", 1]]
-
-        student = [s.pt_row() for s in stevens._students.values()]
-        instructor = [row for Instructor in stevens._instructors.values()
-                      for row in Instructor.pt_row()]
-
-        self.assertEqual(student, expect_student)
-        self.assertEqual(instructor, expect_instructor)
+    def instructor_table_usingdb(self):
+        print("\n\ninstructor pretty tabe using database")
+        pt = PrettyTable(
+            field_names=['cwid', 'name', 'dept', 'course', 'students'])
+        db_file = r"D:\college\finished\ssw 810\810database.db"
+        db = sqlite3.connect(db_file)
+        q = "select i.NAME, i.CWID, i.Dept, g.Course, count(g.student_CWID) as total_students from instructors i join grades g on i.CWID=g.instructor_CWID group by i.cwid, g.course;"
+        for row in db.execute(q):
+            pt.add_row(row)
+        print(pt)
 
 
 def main():
-    path_dir = "D:\\college\\ssw 810\\repo\\"
-    #path_dir=input("enter the path directory: ")
+    #path_dir = "D:\\college\\ssw 810\\repo\\"
+    path_dir=input("enter the path directory: ")
     stevens = Repository(path_dir)
 
 
 if __name__ == '__main__':
     main()
-    unittest.main(exit=False, verbosity=2)
